@@ -25,3 +25,20 @@ type AddToCartRequest struct {
 	Quantity   int    `json:"quantity" binding:"required,min=1"`
 	CartName   string `json:"cart_name" binding:"required"`
 }
+
+type CartResponse struct {
+	CartID    int                `json:"cart_id"`
+	CartName  string             `json:"cart_name"`
+	CreatedAt string             `json:"created_at"`
+	UpdatedAt string             `json:"updated_at"`
+	Items     []CartItemResponse `json:"items"`
+}
+
+type CartItemResponse struct {
+	CartItemID  int    `json:"cart_item_id"`
+	ProductID   int    `json:"product_id"`
+	ProductName string `json:"product_name"`
+	Description string `json:"description"`
+	Price       string `json:"price"`
+	Quantity    int    `json:"quantity"`
+}

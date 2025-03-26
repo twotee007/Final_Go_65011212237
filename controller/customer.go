@@ -4,6 +4,7 @@ import (
 	"go-final/dto"
 	"go-final/model"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -22,6 +23,7 @@ func CustomerController(router *gin.Engine) {
 	{
 		customerRoutes.PUT("/:id/address", updateAddress)
 		customerRoutes.PUT("/:id/password", changePassword)
+		customerRoutes.GET("/:id/carts", getCustomerCarts) // New endpoint
 	}
 	productRoutes := router.Group("/products")
 	{
@@ -351,4 +353,62 @@ func addProductToCart(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Product added to cart successfully", "cart_id": cart.CartID})
+}
+func getCustomerCarts(c *gin.Context) {
+	customerIDStr := c.Param("id")
+	customerID, err := strconv.Atoi(customerIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid customer ID", "details": err.Error()})
+		return
+	}
+
+	// Verify customer exists
+	var customer model.Customer
+	if err := DB.Where("customer_id = ?", customerID).First(&customer).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Customer not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "details": err.Error()})
+		}
+		return
+	}
+
+	// Fetch all carts with preloaded items and products
+	var carts []model.Cart
+	if err := DB.Where("customer_id = ?", customerID).
+		Preload("CartItems.Product").
+		Find(&carts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "details": err.Error()})
+		return
+	}
+
+	// Convert to response format
+	var cartResponses []dto.CartResponse
+	for _, cart := range carts {
+		cartResponse := dto.CartResponse{
+			CartID:    cart.CartID,
+			CartName:  cart.CartName,
+			CreatedAt: cart.CreatedAt.Format("2006-01-02 15:04:05"),
+			UpdatedAt: cart.UpdatedAt.Format("2006-01-02 15:04:05"),
+		}
+
+		for _, item := range cart.CartItems {
+			cartItemResponse := dto.CartItemResponse{
+				CartItemID:  item.CartItemID,
+				ProductID:   item.ProductID,
+				ProductName: item.Product.ProductName,
+				Description: item.Product.Description,
+				Price:       item.Product.Price,
+				Quantity:    item.Quantity,
+			}
+			cartResponse.Items = append(cartResponse.Items, cartItemResponse)
+		}
+
+		cartResponses = append(cartResponses, cartResponse)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"carts":  cartResponses,
+	})
 }
